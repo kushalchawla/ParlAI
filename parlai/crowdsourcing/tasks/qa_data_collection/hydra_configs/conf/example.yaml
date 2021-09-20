@@ -11,7 +11,7 @@ mephisto:
     max_num_concurrent_units: 0  # 0 means infinite; set this to a positive integer to limit concurrent HITs and prevent crashes
     maximum_units_per_worker: 3
     task_name: parlai-qa-example
-    task_title: "Test ParlAI QA Data Collection Task"
+    task_title: "Test ParlAI QA Data Collection Task: KC"
     task_description: >
       This is a ParlAI data collection task.
     task_reward: 0.3
