@@ -40,8 +40,14 @@ class TestScriptConfig(RunScriptConfig):
         default=3,
         metadata={"help": "Number of turns before a conversation is complete"},
     )
+    onboarding_turn_timeout: int = field(
+        default=1800,
+        metadata={
+            "help": "Maximum response time for onboarding response. This is higher since it involves filling in the pre-survey."
+        },
+    )
     turn_timeout: int = field(
-        default=300,
+        default=600,
         metadata={
             "help": "Maximum response time before kicking "
             "a worker out, default 300 seconds"
@@ -57,6 +63,10 @@ def main(cfg: DictConfig) -> None:
     db, cfg = load_db_and_process_config(cfg)
 
     world_opt = {"num_turns": cfg.num_turns, "turn_timeout": cfg.turn_timeout}
+    onboarding_world_opt = {
+        "num_turns": cfg.num_turns,
+        "turn_timeout": cfg.onboarding_turn_timeout,
+    }
 
     custom_bundle_path = cfg.mephisto.blueprint.get("custom_source_bundle", None)
     if custom_bundle_path is not None:
@@ -67,7 +77,7 @@ def main(cfg: DictConfig) -> None:
         world_opt["send_task_data"] = True
 
     shared_state = SharedParlAITaskState(
-        world_opt=world_opt, onboarding_world_opt=world_opt
+        world_opt=world_opt, onboarding_world_opt=onboarding_world_opt
     )
 
     operator = Operator(db)

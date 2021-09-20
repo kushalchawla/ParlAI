@@ -6,26 +6,171 @@
 from parlai.crowdsourcing.utils.worlds import CrowdOnboardWorld, CrowdTaskWorld
 from parlai.core.worlds import validate
 from joblib import Parallel, delayed
+import random
+import os
+import numpy as np
+import json
+import time
+import csv
+from mephisto.operations.logger_core import get_logger
+
+logger = get_logger(name=__name__)
+
+
+class MTurkHandler:
+    """
+    Handles all the I/O. 
+    Basically, anything where you need to work with ParlAI/data/nego_data_collection/ directory.
+    Includes input scenarios and output storage of dialogs and every associated data.
+    """
+
+    def __init__(self, opt):
+        self.task_type = 'sandbox' if opt['is_sandbox'] else 'live'
+        self.scenariopath = os.path.join(
+            opt['datapath'], opt['task'], opt['scenariopath']
+        )
+
+        self.outputpath = os.path.join(self.scenariopath, "output")
+
+        self.input = {
+            "survey_link": "https://www.google.com/",  # link to qualtrics
+            "issues": ["Food", "Water", "Firewood"],  # issue names
+            "items": 3,  # number of items in each issue.
+        }
+
+    def save_conversation_data(self, all_data):
+        """
+        saves all data to a file for every conversation (ie every instantiation of the world)
+        """
+        # create output directory if does not exist.
+        if not os.path.exists(self.outputpath):
+            os.makedirs(self.outputpath)
+
+        # get filename based on time
+        if all_data["convo_is_finished"]:
+            filename = os.path.join(
+                self.outputpath,
+                '{}_{}_{}.json'.format(
+                    time.strftime("%Y%m%d-%H%M%S"),
+                    np.random.randint(0, 1000),
+                    self.task_type,
+                ),
+            )
+        else:
+            filename = os.path.join(
+                self.outputpath,
+                '{}_{}_{}_incomplete.json'.format(
+                    time.strftime("%Y%m%d-%H%M%S"),
+                    np.random.randint(0, 1000),
+                    self.task_type,
+                ),
+            )
+
+        with open(filename, 'w') as fp:
+            json.dump(all_data, fp)
+        print(
+            "NegoDataCollection: "
+            + all_data["world_tag"]
+            + ': Conversation data successfully saved at {}.'.format(filename)
+        )
 
 
 class MultiAgentDialogOnboardWorld(CrowdOnboardWorld):
     def __init__(self, opt, agent):
+
+        logger.info(f"Onboarding world initialization")
+        logger.info(f"opt: {opt}")
+
         super().__init__(opt, agent)
         self.opt = opt
 
+        # self.handler = MTurkHandler(opt=opt)
+        # whether the mturker was matched to another mturker or not; initialized to false.
+        self.agent.nego_got_matched = False
+
     def parley(self):
+        """
+        Get all the onboarding information and store it as attributes in the agent's object. 
+        These will all be stored at the backend once the dialog is complete.
+        """
+
         self.agent.agent_id = "Onboarding Agent"
-        self.agent.observe({"id": "System", "text": "Welcome onboard!"})
-        x = self.agent.act(timeout=self.opt["turn_timeout"])
-        self.agent.observe(
-            {
-                "id": "System",
-                "text": "Thank you for your input! Please wait while "
-                "we match you with another worker...",
-                "episode_done": True,
-            }
-        )
+
+        # request for survey code.
+        sys_act = {}
+        sys_act["id"] = 'System'
+        sys_act[
+            "text"
+        ] = "Welcome onboard! Please complete the survey and enter the code on the left."
+        sys_act["task_data"] = {
+            #'board_status': "ONBOARD_FILL_SURVEY_CODE",
+            #'survey_link': self.handler.input["survey_link"],
+        }
+        self.agent.observe(validate(sys_act))
+
+        # get survey code.
+        act = self.agent.act(timeout=self.opt["turn_timeout"])
+
+        if act['episode_done']:
+            # disconnect or mobile device or any other reason, but the turker has left.
+            self.episodeDone = True  # this guy is done.
+            return
+
+        # we are done here.
         self.episodeDone = True
+
+        """
+        #has the code.
+        #save it in the agent obj
+        self.agent.nego_survey_link = self.handler.input["survey_link"]
+        self.agent.nego_survey_code = act['task_data']['response']['qualtrics_code']
+
+        #randomly choose values for this agent.
+        
+        values = ["High", "Medium", "Low"]
+        random.shuffle(values)
+        
+        #Make food as Highest item
+        
+        #vals = ["Medium", "Low"]
+        #random.shuffle(vals)
+        #values = [vals[0], vals[1], "High"]
+        
+        #add info to the agent object
+        self.agent.nego_issues = self.handler.input["issues"]
+        self.agent.nego_items = self.handler.input["items"]
+        self.agent.nego_values = values
+
+        #request for preference reasons.
+        #need to know which item is HIGH, which item is MEDIUM, which item is LOW.-> that's it.
+        value2issue = {}
+        for i in range(3):
+            value2issue[values[i]] = self.agent.nego_issues[i]
+        self.agent.nego_value2issue = value2issue
+
+        sys_act = {}
+        sys_act["id"] = 'System'
+        sys_act["text"] = "Please complete the requested information on the left."
+        sys_act["task_data"] = {
+            'board_status': "ONBOARD_FILL_PREF_REASONS",
+            'value2issue': self.agent.nego_value2issue,
+        }
+        self.agent.observe(validate(sys_act))
+
+        #get the responses.
+        act = self.agent.act(timeout=self.opt["turn_timeout"])
+
+        if(act['episode_done']):
+            #disconnect or any other reason, but the turker has left.
+            self.episodeDone = True #this guy is done.
+            return
+        
+        #save response to agent obj
+        self.agent.nego_onboarding_response = act['task_data']['response']
+
+        #we are done here.
+        self.episodeDone = True
+        """
 
 
 class MultiAgentDialogWorld(CrowdTaskWorld):
