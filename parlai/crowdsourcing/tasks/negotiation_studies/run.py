@@ -18,6 +18,7 @@ from omegaconf import DictConfig, MISSING
 from dataclasses import dataclass, field
 from typing import List, Any
 import copy
+import numpy as np
 
 TASK_DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 
@@ -66,7 +67,7 @@ register_script_config(name="scriptconfig", module=TestScriptConfig)
 @hydra.main(config_path="hydra_configs", config_name="scriptconfig")
 def main(cfg: DictConfig) -> None:
     db, cfg = load_db_and_process_config(cfg, print_config=True)
-
+    cfg.mephisto.blueprint.onboarding_qualification = f"{cfg.mephisto.blueprint.onboarding_qualification}_{np.random.randint(0, 10000)}"
     print(f"in main: cfg: ", cfg)
 
     world_opt = {

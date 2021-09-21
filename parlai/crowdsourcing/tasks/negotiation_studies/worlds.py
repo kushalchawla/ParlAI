@@ -26,9 +26,7 @@ class MTurkHandler:
 
     def __init__(self, opt):
         self._provider_type = opt['_provider_type']
-
         self.outputpath = os.path.join(opt['kc_managed_storage_dir'], "output")
-
         self.input = {
             "survey_link": "https://www.google.com/",  # link to qualtrics
             "issues": ["Food", "Water", "Firewood"],  # issue names
@@ -169,6 +167,16 @@ class MultiAgentDialogOnboardWorld(CrowdOnboardWorld):
             'text'
         ]  # TODO: update act['task_data']['response']
 
+        # send the final message to end the onboarding
+        sys_act = {}
+        sys_act["id"] = 'System'
+        sys_act[
+            "text"
+        ] = "Thank you for your input! Please wait while we match you with another worker..."
+        sys_act["episode_done"] = True
+        sys_act["task_data"] = {}
+        self.agent.observe(validate(sys_act))
+
         logger.info(f"survey code: {self.agent.nego_survey_code}")
         logger.info(f"nego_onboarding_response: {self.agent.nego_onboarding_response}")
         logger.info(f"self.agent.nego_survey_link: {self.agent.nego_survey_link}")
@@ -189,13 +197,6 @@ class MultiAgentDialogWorld(CrowdTaskWorld):
     def __init__(self, opt, agents=None, shared=None):
         # Add passed in agents directly.
         self.agents = agents
-
-        # revoke qualifications for each agent for the next time.
-        for agent in self.agents:
-            worker = agent.get_worker()
-            worker.revoke_qualification("test-negotiation-qualification")
-            logger.info(f"worker qualification revoked.")
-
         self.acts = [None] * len(agents)
         self.episodeDone = False
         self.max_turns = opt.get("max_turns", 2)
