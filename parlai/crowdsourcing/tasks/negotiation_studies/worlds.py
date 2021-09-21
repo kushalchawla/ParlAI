@@ -25,12 +25,9 @@ class MTurkHandler:
     """
 
     def __init__(self, opt):
-        self.task_type = 'sandbox' if opt['is_sandbox'] else 'live'
-        self.scenariopath = os.path.join(
-            opt['datapath'], opt['task'], opt['scenariopath']
-        )
+        self._provider_type = opt['_provider_type']
 
-        self.outputpath = os.path.join(self.scenariopath, "output")
+        self.outputpath = os.path.join(opt['kc_managed_storage_dir'], "output")
 
         self.input = {
             "survey_link": "https://www.google.com/",  # link to qualtrics
@@ -42,6 +39,7 @@ class MTurkHandler:
         """
         saves all data to a file for every conversation (ie every instantiation of the world)
         """
+
         # create output directory if does not exist.
         if not os.path.exists(self.outputpath):
             os.makedirs(self.outputpath)
@@ -84,7 +82,7 @@ class MultiAgentDialogOnboardWorld(CrowdOnboardWorld):
         super().__init__(opt, agent)
         self.opt = opt
 
-        # self.handler = MTurkHandler(opt=opt)
+        self.handler = MTurkHandler(opt=opt)
         # whether the mturker was matched to another mturker or not; initialized to false.
         self.agent.nego_got_matched = False
 
@@ -93,7 +91,7 @@ class MultiAgentDialogOnboardWorld(CrowdOnboardWorld):
         Get all the onboarding information and store it as attributes in the agent's object. 
         These will all be stored at the backend once the dialog is complete.
         """
-
+        logger.info("Onboarding Parley Begin")
         self.agent.agent_id = "Onboarding Agent"
 
         # request for survey code.
@@ -103,9 +101,11 @@ class MultiAgentDialogOnboardWorld(CrowdOnboardWorld):
             "text"
         ] = "Welcome onboard! Please complete the survey and enter the code on the left."
         sys_act["task_data"] = {
-            #'board_status': "ONBOARD_FILL_SURVEY_CODE",
-            #'survey_link': self.handler.input["survey_link"],
+            'board_status': "ONBOARD_FILL_SURVEY_CODE",
+            'survey_link': self.handler.input["survey_link"],
         }
+
+        logger.info(f"sys_act: {sys_act}")
         self.agent.observe(validate(sys_act))
 
         # get survey code.
@@ -116,33 +116,32 @@ class MultiAgentDialogOnboardWorld(CrowdOnboardWorld):
             self.episodeDone = True  # this guy is done.
             return
 
-        # we are done here.
-        self.episodeDone = True
+        logger.info(f"act: {act}")
 
-        """
-        #has the code.
-        #save it in the agent obj
+        # has the code.
+        # save it in the agent obj
         self.agent.nego_survey_link = self.handler.input["survey_link"]
-        self.agent.nego_survey_code = act['task_data']['response']['qualtrics_code']
+        self.agent.nego_survey_code = act[
+            'text'
+        ]  # TODO: update this: act['task_data']['response']['qualtrics_code']
 
-        #randomly choose values for this agent.
-        
+        # randomly choose values for this agent.
+
         values = ["High", "Medium", "Low"]
         random.shuffle(values)
-        
-        #Make food as Highest item
-        
-        #vals = ["Medium", "Low"]
-        #random.shuffle(vals)
-        #values = [vals[0], vals[1], "High"]
-        
-        #add info to the agent object
+
+        # Make food as Highest item
+        # vals = ["Medium", "Low"]
+        # random.shuffle(vals)
+        # values = [vals[0], vals[1], "High"]
+
+        # add info to the agent object
         self.agent.nego_issues = self.handler.input["issues"]
         self.agent.nego_items = self.handler.input["items"]
         self.agent.nego_values = values
 
-        #request for preference reasons.
-        #need to know which item is HIGH, which item is MEDIUM, which item is LOW.-> that's it.
+        # request for preference reasons.
+        # need to know which item is HIGH, which item is MEDIUM, which item is LOW.-> that's it.
         value2issue = {}
         for i in range(3):
             value2issue[values[i]] = self.agent.nego_issues[i]
@@ -157,20 +156,28 @@ class MultiAgentDialogOnboardWorld(CrowdOnboardWorld):
         }
         self.agent.observe(validate(sys_act))
 
-        #get the responses.
+        # get the responses.
         act = self.agent.act(timeout=self.opt["turn_timeout"])
 
-        if(act['episode_done']):
-            #disconnect or any other reason, but the turker has left.
-            self.episodeDone = True #this guy is done.
+        if act['episode_done']:
+            # disconnect or any other reason, but the turker has left.
+            self.episodeDone = True  # this guy is done.
             return
-        
-        #save response to agent obj
-        self.agent.nego_onboarding_response = act['task_data']['response']
 
-        #we are done here.
+        # save response to agent obj
+        self.agent.nego_onboarding_response = act[
+            'text'
+        ]  # TODO: update act['task_data']['response']
+
+        logger.info(f"survey code: {self.agent.nego_survey_code}")
+        logger.info(f"nego_onboarding_response: {self.agent.nego_onboarding_response}")
+        logger.info(f"self.agent.nego_survey_link: {self.agent.nego_survey_link}")
+        logger.info(f"self.agent.nego_issues: {self.agent.nego_issues}")
+        logger.info(f"self.agent.nego_items: {self.agent.nego_items}")
+        logger.info(f"self.agent.nego_values: {self.agent.nego_values}")
+        logger.info(f"self.agent.nego_value2issue: {self.agent.nego_value2issue}")
+        # we are done here.
         self.episodeDone = True
-        """
 
 
 class MultiAgentDialogWorld(CrowdTaskWorld):
@@ -182,6 +189,13 @@ class MultiAgentDialogWorld(CrowdTaskWorld):
     def __init__(self, opt, agents=None, shared=None):
         # Add passed in agents directly.
         self.agents = agents
+
+        # revoke qualifications for each agent for the next time.
+        for agent in self.agents:
+            worker = agent.get_worker()
+            worker.revoke_qualification("test-negotiation-qualification")
+            logger.info(f"worker qualification revoked.")
+
         self.acts = [None] * len(agents)
         self.episodeDone = False
         self.max_turns = opt.get("max_turns", 2)

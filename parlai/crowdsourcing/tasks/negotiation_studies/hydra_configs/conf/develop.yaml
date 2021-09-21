@@ -2,11 +2,19 @@
 mephisto:
   blueprint:
     custom_source_dir: ${task_dir}/webapp
-    onboarding_qualification: test-parlai-chat-qualification
+    onboarding_qualification: test-negotiation-qualification
+  provider:
+    requester_name: kchawla_sandbox
   task:
-    task_name: parlai-chat-example
+    task_name: negotiation-studies
     task_title: "Negotiate a deal with a partner! Earn upto $5 instantly for one HIT."
     task_description: >
       Please use an updated browser for this HIT. You will first be given a quick tutorial on how to negotiate. Then, you will negotiate with a partner using alternating chat messages to arrive at an agreement. You will earn $0.05 base pay (after completing first stage and being matched with a partner) and $1.95 on completion (when none of the partners disconnects mid-way). Additionally, you can earn up to $3 in bonus, depending on performance and quality. The task is about 20 minutes.
     task_reward: 0.3
+    maximum_units_per_worker: 10
+    assignment_duration_in_seconds: 7200
     task_tags: "dynamic,chat,dialog,text,emotion,negotiation,conversation,survey,assistant,education,fun"
+  log_level: debug
+turn_timeout: 600
+onboarding_turn_timeout: 1800
+kc_managed_storage_dir: /home/ICT2000/chawla/Documents/internship2020/parlai_f21/storage/kc_managed/sandbox1
