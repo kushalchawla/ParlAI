@@ -8,6 +8,10 @@
 
 import React from "react";
 import ReactDOM from "react-dom";
+import {
+  FormControl,
+  Button,
+} from 'react-bootstrap';
 import "bootstrap-chat/styles.css";
 
 import { ChatApp, ChatMessage, DefaultTaskDescription } from "./index.js";
@@ -36,19 +40,95 @@ function RenderChatMessage({ message, mephistoContext, appContext, idx }) {
 }
 
 function OnboardingTaskDescription({ mephistoContext, appContext }) {
-  const { boardStatus, surveyLink, value2Issue } = appContext.taskContext;
+  const { taskContext } = appContext;
+  const { sendMessage, agentId } = mephistoContext;
+
+  const boardStatus = taskContext['board_status'];
+  const surveyLink = taskContext['survey_link'];
+  const value2Issue = taskContext['value2issue'];
+  
+  console.log("OnboardingTaskDescription", boardStatus, surveyLink, value2Issue);
 
   const [sending, setSending] = React.useState(false);
   const [codeTextbox, setCodeTextbox] = React.useState('');
-  const [validityColor, setValidityColot] = React.useState('red');
+  const [validityColor, setValidityColor] = React.useState('red');
   const [validityMsg, setValidityMsg] = React.useState('INVALID');
   const [codeValid, setCodeValid] = React.useState(false);
   const [highReason, setHighReason] = React.useState('');
   const [mediumReason, setMediumReason] = React.useState('');
   const [lowReason, setLowReason] = React.useState('');
 
-  let mainContent = null;
+  //internal function calls
+  function handleSubmitCode() {
+    const response_text = "Submitted";
+    const response = {
+        qualtrics_code: codeTextbox
+    };
 
+    tryMessageSend(response_text, response);
+  }
+
+  function handleSubmitReasons() {
+    const response_text = "Submitted";
+    const response = {
+        high_reason: highReason,
+        medium_reason: mediumReason,
+        low_reason: lowReason,
+    };
+
+    tryMessageSend(response_text, response);
+  }
+
+  function handleCodeTextboxChange(val) {
+    
+    if((val.length === 10) && (!val.includes(' '))) {
+      if(val[4] === 'T' && val[5] === '2') {
+          setCodeTextbox(val);
+          setValidityColor('green');
+          setValidityMsg('VALID');
+          setCodeValid(true);
+      }
+      else {
+        setCodeTextbox(val);
+        setValidityColor('red');
+        setValidityMsg('INVALID');
+        setCodeValid(false);
+      }
+    }
+    else {
+      setCodeTextbox(val);
+      setValidityColor('red');
+      setValidityMsg('INVALID');
+      setCodeValid(false);
+    }
+
+  }
+
+  function tryMessageSend(response_text, response) {
+    setSending(true);
+
+    const finalObj = {
+      text: response_text,
+      task_data: {response: response},
+      id: agentId,
+      episode_done: false,
+    };
+    
+    sendMessage(finalObj).then(
+      () => setSending(false)
+    );
+  }
+
+  function countWords(str) {
+
+    str = str.replace(/(^\s*)|(\s*$)/gi,"");
+    str = str.replace(/[ ]{2,}/gi," ");
+    str = str.replace(/\n /,"\n");
+    return str.split(' ').length;
+
+  }
+
+  let mainContent = null;
   if(boardStatus == "ONBOARD_FILL_SURVEY_CODE") {
     mainContent = (
       <div id="ONBOARD_FILL_SURVEY_CODE">
@@ -179,7 +259,7 @@ function OnboardingTaskDescription({ mephistoContext, appContext }) {
               className="btn btn-primary"
               style={{ fontSize: '16px' }}
               id="id_submit_reasons"
-              onClick={() => handleSubmitResponse()}
+              onClick={() => handleSubmitReasons()}
               disabled={highReason === '' || mediumReason === '' || lowReason === '' || (countWords(highReason) < 5) || (countWords(mediumReason) < 5) || (countWords(lowReason) < 5) || sending}
             >
               Submit Answers
@@ -233,7 +313,7 @@ function MainApp() {
       }
     }
       renderSidePane={({ mephistoContext, appContext }) => {
-        const { agentStatus } = mephistoContext;
+        const { taskConfig, agentStatus } = mephistoContext;
 
         let mainContent = null;
 
@@ -265,8 +345,13 @@ function MainApp() {
           //keep it empty for now
         }
 
+        console.log("renderSidePane", agentStatus, mainContent);
+
         return (
-          <DefaultTaskDescription>
+          <DefaultTaskDescription
+            chatTitle={taskConfig.chat_title}
+            taskDescriptionHtml={taskConfig.task_description}
+          >
             {mainContent}
           </DefaultTaskDescription>
         );

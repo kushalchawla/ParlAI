@@ -119,9 +119,7 @@ class MultiAgentDialogOnboardWorld(CrowdOnboardWorld):
         # has the code.
         # save it in the agent obj
         self.agent.nego_survey_link = self.handler.input["survey_link"]
-        self.agent.nego_survey_code = act[
-            'text'
-        ]  # TODO: update this: act['task_data']['response']['qualtrics_code']
+        self.agent.nego_survey_code = act['task_data']['response']['qualtrics_code']
 
         # randomly choose values for this agent.
 
@@ -163,9 +161,7 @@ class MultiAgentDialogOnboardWorld(CrowdOnboardWorld):
             return
 
         # save response to agent obj
-        self.agent.nego_onboarding_response = act[
-            'text'
-        ]  # TODO: update act['task_data']['response']
+        self.agent.nego_onboarding_response = act['task_data']['response']
 
         # send the final message to end the onboarding
         sys_act = {}

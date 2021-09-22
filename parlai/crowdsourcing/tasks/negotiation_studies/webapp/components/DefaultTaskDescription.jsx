@@ -14,6 +14,7 @@ function NegotiationDefaultTaskDescription({ chatTitle, taskDescriptionHtml, chi
     <div>
       <hr style={{ borderTop: "1px solid #555" }} />
       {children}
+      {children ? <hr style={{ borderTop: "1px solid #555" }} /> : null}
     </div>
   );
 }
