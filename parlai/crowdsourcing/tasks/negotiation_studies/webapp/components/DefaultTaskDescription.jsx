@@ -12,10 +12,8 @@ import React from "react";
 function NegotiationDefaultTaskDescription({ chatTitle, taskDescriptionHtml, children }) {
   return (
     <div>
-      <h1>{chatTitle}</h1>
       <hr style={{ borderTop: "1px solid #555" }} />
       {children}
-      {children ? <hr style={{ borderTop: "1px solid #555" }} /> : null}
     </div>
   );
 }

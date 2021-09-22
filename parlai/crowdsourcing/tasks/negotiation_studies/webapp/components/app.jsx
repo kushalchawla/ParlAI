@@ -12,6 +12,8 @@ import "bootstrap-chat/styles.css";
 
 import { ChatApp, ChatMessage, DefaultTaskDescription } from "./index.js";
 
+import { AGENT_STATUS } from "mephisto-task";
+
 function RenderChatMessage({ message, mephistoContext, appContext, idx }) {
   const { agentId } = mephistoContext;
   const { currentAgentNames } = appContext.taskContext;
@@ -33,6 +35,187 @@ function RenderChatMessage({ message, mephistoContext, appContext, idx }) {
   );
 }
 
+function OnboardingTaskDescription({ mephistoContext, appContext }) {
+  const { boardStatus, surveyLink, value2Issue } = appContext.taskContext;
+
+  const [sending, setSending] = React.useState(false);
+  const [codeTextbox, setCodeTextbox] = React.useState('');
+  const [validityColor, setValidityColot] = React.useState('red');
+  const [validityMsg, setValidityMsg] = React.useState('INVALID');
+  const [codeValid, setCodeValid] = React.useState(false);
+  const [highReason, setHighReason] = React.useState('');
+  const [mediumReason, setMediumReason] = React.useState('');
+  const [lowReason, setLowReason] = React.useState('');
+
+  let mainContent = null;
+
+  if(boardStatus == "ONBOARD_FILL_SURVEY_CODE") {
+    mainContent = (
+      <div id="ONBOARD_FILL_SURVEY_CODE">
+          <div style={{ fontSize: '16px' }}>
+              <span>- NOTE: Please use latest browsers to avoid any technical glitches. It is advisable to update the browser and restart the HIT.</span>
+              <br /><br />
+              <span>- Please turn on the system volume for notifications and the tutorial.</span>
+              <br /><br />
+              <span>- This is a <b>HIGH PAYING TASK</b>. You will be <b>blocked</b> if the conversation is effortless or not as per instructions.</span>
+              <br /><br />
+              <span>- <b>Do not reference the task, MTurk, money or discuss the number of messages</b> during the conversation.</span>
+              <br /><br />
+              <span>- <b>No racism, sexism or otherwise offensive comments</b>, or the submission will be rejected and reported to Amazon.</span>
+          </div>
+          <hr style={{ borderTop: '1px solid #555' }} />
+          <span
+            id="task-description"
+            style={{ fontSize: '16px' }}>
+          Please complete the survey and tutorial by clicking <a href={surveyLink} target='_blank'>here</a>. Copy the generated 10-character code (no spaces) in the input box below and submit. NOTE: you can save your code in case you get disconnected or are not matched but atleast watch the tutorial (<a href='https://youtu.be/7WLy8qjjMTY' target='_blank'>here</a>) every time before proceeding.
+          </span>
+          <br/>
+          <div style={{ alignItems: 'center', display: 'flex' }}>
+              <FormControl
+              type="text"
+              id="id_code_textbox"
+              style={{
+                width: '50%',
+                height: '100%',
+                float: 'left',
+                fontSize: '12px',
+              }}
+              value={codeTextbox}
+              placeholder="Enter Survey Code here"
+              onChange={e => handleCodeTextboxChange(e.target.value)}
+              disabled={sending}
+            />
+              <span id="id-validity-msg" style={{ color: validityColor, marginLeft: '2px' }}>{validityMsg}</span>
+          </div>
+            <br/>
+          <Button
+              className="btn btn-primary"
+              style={{ fontSize: '16px', marginTop: '10px' }}
+              id="id_submit_code"
+              onClick={() => handleSubmitCode()}
+              disabled={sending || !codeValid}
+            >
+              Submit Code
+          </Button>
+      </div>
+  );
+  } else if(boardStatus == "ONBOARD_FILL_PREF_REASONS") {
+    
+    let badReasonsMsg = "";
+    
+    if((countWords(highReason) < 5) || (countWords(mediumReason) < 5) || (countWords(lowReason) < 5)) {
+        badReasonsMsg = "Please be more specific and write complete English sentences everywhere."
+    }
+    mainContent = (  
+      <div id="ONBOARD_FILL_PREF_REASONS" style={{ fontSize: '16px' }}>
+          <div>
+              Your preference order and rules for bonus payments:
+              <ol>
+                <li>The <span style={{ color: 'blue' }}><b>{value2Issue['High']}</b></span> packages are worth the most. They are worth <span style={{ color: 'blue' }}><b>41 cents</b></span> a piece, so if you get <b>all three</b> of <span style={{ color: 'blue' }}><b>{value2Issue['High']}</b></span> packages, you’ll earn <span style={{ color: 'blue' }}><b>$1.23</b></span>.</li>
+
+                <li>Each <span style={{ color: 'blue' }}><b>{value2Issue['Medium']}</b></span> package is worth <span style={{ color: 'blue' }}><b>only about 4/5</b></span> as much as a package of <span style={{ color: 'blue' }}><b>{value2Issue['High']}</b></span>.</li>
+
+                <li>Each <span style={{ color: 'blue' }}><b>{value2Issue['Low']}</b></span> package is worth <span style={{ color: 'blue' }}><b>only about 3/5</b></span> as much as a package of <span style={{ color: 'blue' }}><b>{value2Issue['High']}</b></span>.</li>
+              </ol>
+              In total, you can earn <span style={{ color: 'blue' }}><b>$3</b></span> as bonus. If you WALK AWAY due to no agreement, you will be paid <span style={{ color: 'blue' }}><b>flat 41 cents</b></span> as bonus.
+            <hr style={{ borderTop: '1px solid #555' }} />
+              For your camping, you already have basic supplies and you will negotiate for additional packages. Below, we ask you to think of a real-life inspired reason, <b>justifying why you would need additional packages for your preferred items</b>.
+              <br/>
+              Think: Did you already get enough from home? Or do you need more for a specific hike/trip/emergency? Or anything else? <span style={{ color: 'blue' }}><b>BE CREATIVE!!!</b></span> <span style={{ color: 'blue' }}><b>BE SPECIFIC!!!</b></span> Write complete English sentences. <span style={{ color: 'blue' }}><b>You will later use these reasons when you negotiate.</b></span>
+          </div>
+          <hr style={{ borderTop: '1px solid #555' }} />  
+          <div>
+              Your <b>HIGHEST</b> priority item is <span style={{ color: 'blue' }}><b>{value2Issue['High']}</b></span>. Think of a reason why you would need <b>additional packages</b> of this item the most?
+              <FormControl
+              type="text"
+              id="id_high_reason"
+              style={{
+                width: '80%',
+                height: '100%',
+                fontSize: '12px',
+              }}
+              value={highReason}
+              placeholder="Enter here"
+              onChange={e => setHighReason(e.target.value)}
+              disabled={sending}
+              />
+          </div>
+          <br /><br />
+          <div>
+              Your <b>MEDIUM</b> priority item is <span style={{ color: 'blue' }}><b>{value2Issue['Medium']}</b></span>. Think of a reason why you would need <b>additional packages</b> of this item second?
+              <FormControl
+              type="text"
+              id="id_medium_reason"
+              style={{
+                width: '80%',
+                height: '100%',
+                fontSize: '12px',
+              }}
+              value={mediumReason}
+              placeholder="Enter here"
+              onChange={e => setMediumReason(e.target.value)}
+              disabled={sending}
+              />
+          </div>
+          <br /><br />
+          <div>
+              Your <b>LOWEST</b> priority item is <span style={{ color: 'blue' }}><b>{value2Issue['Low']}</b></span>. Think of a reason why you would prefer <b>additional packages</b> of this item the least?
+              <FormControl
+              type="text"
+              id="id_low_reason"
+              style={{
+                width: '80%',
+                height: '100%',
+                fontSize: '12px',
+              }}
+              value={lowReason}
+              placeholder="Enter here"
+              onChange={e => setLowReason(e.target.value)}
+              disabled={sending}
+              />
+          </div>
+          <br /><br />
+          <Button
+              className="btn btn-primary"
+              style={{ fontSize: '16px' }}
+              id="id_submit_reasons"
+              onClick={() => handleSubmitResponse()}
+              disabled={highReason === '' || mediumReason === '' || lowReason === '' || (countWords(highReason) < 5) || (countWords(mediumReason) < 5) || (countWords(lowReason) < 5) || sending}
+            >
+              Submit Answers
+          </Button>
+          <div style={{color: 'red'}}>{badReasonsMsg}</div>
+      </div>
+  );
+  }
+
+  return (
+    <div>
+      {mainContent}
+    </div>
+  );
+}
+
+function WaitingTaskDescription({ mephistoContext, appContext }) {
+  let mainContent = <h3>Inside waiting task description</h3>;
+
+  return (
+    <div>
+      {mainContent}
+    </div>
+  );
+}
+
+function MainTaskDescription({ mephistoContext, appContext }) {
+  let mainContent = <h3>Inside main task description</h3>;
+
+  return (
+    <div>
+      {mainContent}
+    </div>
+  );
+}
+
 function MainApp() {
   return (
     <ChatApp
@@ -49,23 +232,43 @@ function MainApp() {
         );
       }
     }
-      renderSidePane={({ mephistoContext: { taskConfig } }) => {
+      renderSidePane={({ mephistoContext, appContext }) => {
+        const { agentStatus } = mephistoContext;
+
+        let mainContent = null;
+
+        if(agentStatus == AGENT_STATUS.ONBOARDING) {
+          mainContent = (
+            <OnboardingTaskDescription
+              mephistoContext = {mephistoContext}
+              appContext = {appContext}
+            />
+          );
+        }
+        else if(agentStatus == AGENT_STATUS.WAITING) {
+          mainContent = (
+            <WaitingTaskDescription
+              mephistoContext = {mephistoContext}
+              appContext = {appContext}
+            />
+          );
+        }
+        else if(agentStatus == AGENT_STATUS.IN_TASK) {
+          mainContent = (
+            <MainTaskDescription
+              mephistoContext = {mephistoContext}
+              appContext = {appContext}
+            />
+          );
+        }
+        else {
+          //keep it empty for now
+        }
 
         return (
-        <DefaultTaskDescription
-          chatTitle={taskConfig.chat_title}
-          taskDescriptionHtml={taskConfig.task_description}
-        >
-          <h2>This is a custom Task Description built from a source dir</h2>
-          <p>
-            It has the ability to do a number of things, like directly access
-            the contents of task data, view the number of messages so far, and
-            pretty much anything you make like. We're also able to control other
-            components as well, as in this example we've made it so that if you
-            click a message, it will alert with that message idx.
-          </p>
-          <p>The regular task description content will now appear below:</p>
-        </DefaultTaskDescription>
+          <DefaultTaskDescription>
+            {mainContent}
+          </DefaultTaskDescription>
         );
       }
     }
