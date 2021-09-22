@@ -10,7 +10,7 @@ import React from "react";
 import ReactDOM from "react-dom";
 import "bootstrap-chat/styles.css";
 
-import { ChatApp, ChatMessage, DefaultTaskDescription } from "bootstrap-chat";
+import { ChatApp, ChatMessage, DefaultTaskDescription } from "./index.js";
 
 function RenderChatMessage({ message, mephistoContext, appContext, idx }) {
   const { agentId } = mephistoContext;
@@ -36,7 +36,9 @@ function RenderChatMessage({ message, mephistoContext, appContext, idx }) {
 function MainApp() {
   return (
     <ChatApp
-      renderMessage={({ message, idx, mephistoContext, appContext }) => (
+      renderMessage={({ message, idx, mephistoContext, appContext }) => {
+        
+        return (
         <RenderChatMessage
           message={message}
           mephistoContext={mephistoContext}
@@ -44,13 +46,17 @@ function MainApp() {
           idx={idx}
           key={message.message_id + "-" + idx}
         />
-      )}
-      renderSidePane={({ mephistoContext: { taskConfig } }) => (
+        );
+      }
+    }
+      renderSidePane={({ mephistoContext: { taskConfig } }) => {
+
+        return (
         <DefaultTaskDescription
           chatTitle={taskConfig.chat_title}
           taskDescriptionHtml={taskConfig.task_description}
         >
-          <h2>This is a custom Task Description loaded from a custom bundle</h2>
+          <h2>This is a custom Task Description built from a source dir</h2>
           <p>
             It has the ability to do a number of things, like directly access
             the contents of task data, view the number of messages so far, and
@@ -60,7 +66,9 @@ function MainApp() {
           </p>
           <p>The regular task description content will now appear below:</p>
         </DefaultTaskDescription>
-      )}
+        );
+      }
+    }
     />
   );
 }
