@@ -14,7 +14,8 @@ import {
 } from 'react-bootstrap';
 import "bootstrap-chat/styles.css";
 
-import { ChatApp, ChatMessage, DefaultTaskDescription } from "./index.js";
+import { ChatApp, ChatMessage } from "bootstrap-chat";
+import DefaultTaskDescription from "./index.js";
 
 import { AGENT_STATUS } from "mephisto-task";
 
@@ -47,7 +48,7 @@ function OnboardingTaskDescription({ mephistoContext, appContext }) {
   const surveyLink = taskContext['survey_link'];
   const value2Issue = taskContext['value2issue'];
   
-  console.log("OnboardingTaskDescription", boardStatus, surveyLink, value2Issue);
+  //console.log("OnboardingTaskDescription", boardStatus, surveyLink, value2Issue);
 
   const [sending, setSending] = React.useState(false);
   const [codeTextbox, setCodeTextbox] = React.useState('');
@@ -345,7 +346,7 @@ function MainApp() {
           //keep it empty for now
         }
 
-        console.log("renderSidePane", agentStatus, mainContent);
+        //console.log("renderSidePane", agentStatus, mainContent);
 
         return (
           <DefaultTaskDescription
