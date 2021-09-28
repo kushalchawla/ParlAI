@@ -75,6 +75,7 @@ def main(cfg: DictConfig) -> None:
         "turn_timeout": cfg.turn_timeout,
         "kc_managed_storage_dir": cfg.kc_managed_storage_dir,
         "_provider_type": cfg.mephisto.provider._provider_type,
+        "reward": cfg.mephisto.task.task_reward,
     }
 
     # update time out for the onboarding responses.
