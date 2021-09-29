@@ -12,6 +12,9 @@ from mephisto.abstractions.blueprints.parlai_chat.parlai_chat_blueprint import (
     BLUEPRINT_TYPE,
     SharedParlAITaskState,
 )
+from mephisto.abstractions.providers.mturk.utils.script_utils import (
+    direct_soft_block_mturk_workers,
+)
 
 import hydra
 from omegaconf import DictConfig, MISSING
@@ -76,6 +79,7 @@ def main(cfg: DictConfig) -> None:
         "kc_managed_storage_dir": cfg.kc_managed_storage_dir,
         "_provider_type": cfg.mephisto.provider._provider_type,
         "reward": cfg.mephisto.task.task_reward,
+        "block_qualification": cfg.mephisto.blueprint.block_qualification,
     }
 
     # update time out for the onboarding responses.
@@ -92,6 +96,39 @@ def main(cfg: DictConfig) -> None:
 
     shared_state = SharedParlAITaskState(
         world_opt=world_opt, onboarding_world_opt=onboarding_world_opt
+    )
+
+    # add mturk specific qualifications
+    agent_qualifications = [
+        {
+            'QualificationTypeId': "000000000000000000L0",  # PercentAssignmentsApproved
+            'Comparator': 'GreaterThan',
+            'IntegerValues': [95],
+            'ActionsGuarded': 'DiscoverPreviewAndAccept',
+        },
+        {
+            'QualificationTypeId': "00000000000000000040",  # NumberOfAssignmentsApproved
+            'Comparator': 'GreaterThan',
+            'IntegerValues': [750],
+            'ActionsGuarded': 'DiscoverPreviewAndAccept',
+        },
+        {
+            'QualificationTypeId': "00000000000000000071",  # Worker Location
+            'Comparator': 'EqualTo',
+            'LocaleValues': [{'Country': "US"}],
+            'ActionsGuarded': 'DiscoverPreviewAndAccept',
+        },
+    ]
+    shared_state.mturk_specific_qualifications = agent_qualifications
+
+    # block any known bad workers
+    workers_to_block = (
+        []
+    )  # actual worker ids for the workers you want to soft-block (by just adding a qualification that can be removed later on.)
+    soft_block_qual_name = cfg.mephisto.blueprint.block_qualification
+    requester_name = cfg.mephisto.provider.requester_name
+    direct_soft_block_mturk_workers(
+        db, workers_to_block, soft_block_qual_name, requester_name
     )
 
     operator = Operator(db)

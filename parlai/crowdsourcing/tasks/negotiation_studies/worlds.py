@@ -236,6 +236,10 @@ class MultiAgentDialogWorld(CrowdTaskWorld):
         self.statuses = {}
         for agent_id in self.agent_ids:
             self.statuses[agent_id] = "CHAT"  # Initial status for both the agents.
+        self.data_has_been_saved = (
+            False
+        )  # whether the data for this conversation has been saved or not. Ensures that the data saving is only called once, regardless of whether prep_save_data is called multiple times or not.
+        self.block_qualification = opt['block_qualification']
 
     def parley(self):
         """
@@ -552,8 +556,252 @@ class MultiAgentDialogWorld(CrowdTaskWorld):
                     )
                     self.episodeDone = True  # just to finish things
 
+    def compute_bonuses(self):
+        """
+        Basically, store the bonus for each agent in the object.
+        """
+        for agent in self.agents:
+            agent.nego_final_base_pay = 0  # initialization
+            agent.nego_performance_bonus = 0  # initialization
+            agent.mean_nwords = -1  # initialization
+            agent.dummy_wrong = -1  # initialization
+            agent.work_quality = 'NA'  # initialization
+
+        if not self.convo_is_finished:
+            # no bonus needs to be paid, hence, the above variables will not be used. lets just return here
+            return
+
+        # bonus needs to be paid.
+
+        # final_base_pay is fixed
+        for agent in self.agents:
+            agent.nego_final_base_pay = (
+                2 - self.reward
+            )  # 2 is the total base pay based on approx. 20 minutes time.. $6 per hour.
+
+        """
+        performance bonus
+        H=0.41, M=0.33, L=0.26
+        What do you have for every agent?
+        agent.nego_items, agent.nego_values, agent.nego_issues, agent.nego_value2issue
+        values are some permutation of ["High", "Medium", "Low"]
+        
+        self.last_submitted_deal_data: is also available in one of the acts, may not be correct for instance, if reject deal and then walk away.
+        self.acts: list of all acts.
+        
+        Steps:
+        1) The conversation is complete for sure. Figure out if the agreement was reached or someone walked away.
+        2) If the agreement was reached, verify that self.last_submitted_deal_data contains the last submitted deal -> this should theoretically be true.
+        3) figure out the individual bonuses.
+        """
+
+        # last two acts will be post-surveys, third-last act will tell whether the last deal was accepted or someone walked away.
+        third_last_act = self.acts[-3]
+
+        if third_last_act["text"] == "Walk-Away":
+            # someone walked away, both will get flat rate for no agreement: $0.41
+            for agent in self.agents:
+                agent.nego_performance_bonus = 0.41  # rate for one High item.
+        elif third_last_act["text"] == "Accept-Deal":
+
+            # the deal was accepted; compute performance-based bonus. The deal will be in the fourth last act (with text Submit-Deal) or also stored in self.last_submitted_deal_data; directly use from the latter.
+            # Who is you? Who is they? -> Whoever accepted the deal is "they".
+            they_id = third_last_act["id"]
+
+            # whatever is not they_id, is you_id
+            you_id = "mturk_agent_1"
+            if they_id == you_id:
+                # wrong assumption; change required.
+                you_id = "mturk_agent_2"
+
+            # bonus for one item of each type
+            H, M, L = 0.41, 0.33, 0.26
+
+            # compute for each agent.
+            for agent in self.agents:
+                if agent.id == you_id:
+                    # this is You guy, this is the guy who submitted the deal.
+                    Hc = int(
+                        self.last_submitted_deal_data["issue2youget"][
+                            agent.nego_value2issue["High"]
+                        ]
+                    )
+                    Mc = int(
+                        self.last_submitted_deal_data["issue2youget"][
+                            agent.nego_value2issue["Medium"]
+                        ]
+                    )
+                    Lc = int(
+                        self.last_submitted_deal_data["issue2youget"][
+                            agent.nego_value2issue["Low"]
+                        ]
+                    )
+
+                elif agent.id == they_id:
+                    # this is They guy, this is the guy who accepted the deal.
+                    Hc = int(
+                        self.last_submitted_deal_data["issue2theyget"][
+                            agent.nego_value2issue["High"]
+                        ]
+                    )
+                    Mc = int(
+                        self.last_submitted_deal_data["issue2theyget"][
+                            agent.nego_value2issue["Medium"]
+                        ]
+                    )
+                    Lc = int(
+                        self.last_submitted_deal_data["issue2theyget"][
+                            agent.nego_value2issue["Low"]
+                        ]
+                    )
+
+                agent.nego_performance_bonus = H * Hc + M * Mc + L * Lc
+        else:
+            # something unknown happened, do not pay any performance bonus.
+            pass
+
+        # verification checks
+        """
+        1.	If average number of words per message is <= 2: DON’T PAY (ie pay just $0.05 as the bonus)
+        2.	If average number of words per message is <= 4 and at least one (out of 2) verification questions is wrong: DON’T PAY.
+        3.	If average number of words per message is <= 6 and both the verification questions are wrong: DON’T PAY.
+        """
+        for agent in self.agents:
+            aid = agent.id
+
+            # mean number of words in a message
+            nwords = []
+            for act in self.acts:
+                if (
+                    act['text']
+                    not in [
+                        'Submit-Deal',
+                        'Accept-Deal',
+                        'Reject-Deal',
+                        'Walk-Away',
+                        'Submit-Post-Survey',
+                    ]
+                ) and (act['id'] == aid):
+                    nwords.append(len(act['text'].split()))
+            mean_nwords = np.mean(nwords)
+
+            # number of wrong dummy questions (0/1/2)
+            dummy_wrong = 0
+            for act in self.acts[-2:]:
+                if (act['text'] == 'Submit-Post-Survey') and (act['id'] == aid):
+                    if (
+                        act['task_data']['response']['highest_item']
+                        != agent.nego_value2issue['High']
+                    ):
+                        dummy_wrong += 1
+                    if (
+                        act['task_data']['response']['lowest_item']
+                        != agent.nego_value2issue['Low']
+                    ):
+                        dummy_wrong += 1
+
+            # rules
+            agent.mean_nwords = mean_nwords
+            agent.dummy_wrong = dummy_wrong
+            agent.work_quality = 'pass'
+
+            if mean_nwords <= 2:
+                agent.work_quality = 'fail_R1'
+            if (mean_nwords <= 4) and (dummy_wrong >= 1):
+                agent.work_quality = 'fail_R2'
+            if (mean_nwords <= 6) and (dummy_wrong == 2):
+                agent.work_quality = 'fail_R3'
+
+    def save_data(self):
+        convo_finished = True
+        bad_workers = []
+        for ag in self.agents:
+            if (
+                ag.hit_is_abandoned
+                or ag.hit_is_returned
+                or ag.disconnected
+                or ag.hit_is_expired
+            ):
+                bad_workers.append(ag.worker_id)
+                convo_finished = False
+
+        if convo_finished:
+            self.convo_is_finished = True
+
+        # compute bonus rewards
+        self.compute_bonuses()
+
+        agent_details = []
+        for agent in self.agents:
+            dat = {}
+            dat["id"] = agent.id
+            dat["worker_id"] = agent.worker_id
+            dat["assignment_id"] = agent.assignment_id
+            dat["hit_id"] = agent.hit_id
+            dat[
+                "nego_got_matched"
+            ] = (
+                agent.nego_got_matched
+            )  # if this is true, this means the agent was paid the base pay for matching (typically $0.05)
+            dat["survey_link"] = agent.nego_survey_link
+            dat["survey_code"] = agent.nego_survey_code
+            dat["issues"] = agent.nego_issues
+            dat["items"] = agent.nego_items
+            dat["values"] = agent.nego_values
+            dat["value2issue"] = agent.nego_value2issue
+            dat["onboarding_response"] = agent.nego_onboarding_response
+            dat["initial_base_pay"] = (
+                self.reward if agent.nego_got_matched else 0
+            )  # ideally, else case would never arrive if we have reach this point.
+            dat[
+                "final_base_pay"
+            ] = agent.nego_final_base_pay  # basically the total base pay ($2) - reward.
+            dat[
+                "performance_bonus"
+            ] = (
+                agent.nego_performance_bonus
+            )  # this is the bonus amount which was poid to the mturker.
+            dat["final_status"] = self.statuses[
+                agent.id
+            ]  # Normally, this will be END for both on completion.
+            dat["work_quality"] = agent.work_quality
+            dat["mean_nwords"] = agent.mean_nwords
+            dat["dummy_wrong"] = agent.dummy_wrong
+            agent_details.append(dat)
+
+        """
+        Store all data for this world/dialog
+        Scenarios for each worker (mapped with Worker ID)
+        AMT details of each worker
+        complete dialog
+        Pre-survey questions.
+        Post-survey questions
+        bad worker details.
+        Meta data about the dialog/conversation
+        """
+        all_data = {
+            'convo_is_finished': self.convo_is_finished,
+            'world_tag': self.world_tag,
+            'bad_workers': bad_workers,
+            'acts': self.acts,  # contains all the returned acts.
+            'turns': self.turns,  # includes system turns
+            'workers': agent_details,
+        }
+
+        self.handler.save_conversation_data(all_data)
+
     def episode_done(self):
         return self.episodeDone
+
+    def prep_save_data(self, UNUSED_PARAM):
+        """Process and return any additional data from this world you may want to store"""
+        if not self.data_has_been_saved:
+            self.save_data()
+            self.data_has_been_saved = True
+
+        return {
+            "dummy_key": "dummy_value -- The conversation data is manually stored by KC."
+        }
 
     def shutdown(self):
         """
@@ -583,6 +831,40 @@ class MultiAgentDialogWorld(CrowdTaskWorld):
         Parallel(n_jobs=len(self.agents), backend='threading')(
             delayed(review_agent)(agent) for agent in self.agents
         )
+
+        # Pay Bonus
+        if self.convo_is_finished:
+            for ag in self.agents:
+                if ag.work_quality == 'pass':
+                    total_bonus = round(
+                        ag.nego_final_base_pay + ag.nego_performance_bonus, 2
+                    )  # rounded to 2 decimal places.
+                    reason = "The amount was computed based on whether the task was completed as per the instructions and the bonus payment rules. Thanks for participating!"
+                else:
+                    total_bonus = 0.05
+                    reason = "Reduced bonus because of unsatisfactory work. Please note that not following the instructions properly affects the whole dialogue, even if your partner did high-quality work. Hence, it is very costly for us. If you think this is a mistake, please contact us. We would be very happy to discuss and pay you accordingly."
+                tup = ag.mephisto_agent.get_worker().bonus_worker(
+                    total_bonus, reason, ag.mephisto_agent.get_unit()
+                )
+                print(
+                    "Bonus payment: worker_id, assignment_id, total_bonus, work_quality, paid tup: ",
+                    ag.worker_id,
+                    ag.assignment_id,
+                    total_bonus,
+                    ag.work_quality,
+                    tup,
+                )
+        else:
+            print("No bonus paid.")
+
+        # soft-block the workers for future, if required.
+        if self.convo_is_finished:
+            for ag in self.agents:
+                if ag.work_quality != 'pass':
+                    # soft block this worker due to unsatisfactory work.
+                    ag.mephisto_agent.get_worker().grant_qualification(
+                        self.block_qualification
+                    )
 
 
 def make_onboarding_world(opt, agent):
