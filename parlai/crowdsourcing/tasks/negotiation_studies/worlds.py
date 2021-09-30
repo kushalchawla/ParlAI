@@ -236,9 +236,6 @@ class MultiAgentDialogWorld(CrowdTaskWorld):
         self.statuses = {}
         for agent_id in self.agent_ids:
             self.statuses[agent_id] = "CHAT"  # Initial status for both the agents.
-        self.data_has_been_saved = (
-            False
-        )  # whether the data for this conversation has been saved or not. Ensures that the data saving is only called once, regardless of whether prep_save_data is called multiple times or not.
         self.block_qualification = opt['block_qualification']
 
     def parley(self):
@@ -793,16 +790,6 @@ class MultiAgentDialogWorld(CrowdTaskWorld):
     def episode_done(self):
         return self.episodeDone
 
-    def prep_save_data(self, UNUSED_PARAM):
-        """Process and return any additional data from this world you may want to store"""
-        if not self.data_has_been_saved:
-            self.save_data()
-            self.data_has_been_saved = True
-
-        return {
-            "dummy_key": "dummy_value -- The conversation data is manually stored by KC."
-        }
-
     def shutdown(self):
         """
         Shutdown all mturk agents in parallel, otherwise if one mturk agent is
@@ -819,6 +806,11 @@ class MultiAgentDialogWorld(CrowdTaskWorld):
         Parallel(n_jobs=len(self.agents), backend="threading")(
             delayed(shutdown_agent)(agent) for agent in self.agents
         )
+
+        # save data and call review_work (this is the recommended place for review_work as per Mephisto Issue #579)
+        self.save_data()
+
+        self.review_work()
 
     def review_work(self):
         global review_agent
